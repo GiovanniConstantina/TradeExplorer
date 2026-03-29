@@ -8,4 +8,7 @@ from datetime import datetime
 import csv
 from pathlib import Path
 
+# DATA LOADING
+# Reads the cleaned CSV exported from the Jupyter Notebook
+# Columns: Exporter, Importer, Trade_Value_USD, Year, Exporter_Region, Importer_Region, Flow
 df = pd.read_csv('data/trade_data_cleaned.csv')
