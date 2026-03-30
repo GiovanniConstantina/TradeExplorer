@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chord Embed</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background: #0d0f14; overflow: hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
+#main-svg { display:block; max-width:100%; max-height:100vh; }
+#tooltip {
+  display:none; position:fixed; z-index:100;
+  background:rgba(13,15,20,0.95); border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px; padding:10px 14px; pointer-events:none;
+  font-family:'Inter',sans-serif; font-size:12px; color:#e8eaf0;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+.tt-route { font-weight:600; margin-bottom:4px; font-size:13px; }
+.tt-val { color:#3b82f6; font-size:15px; font-weight:600; }
+.tt-region { color:#9499a8; font-size:10px; margin-top:4px; font-family:monospace; letter-spacing:0.05em; }
+</style>
+</head>
+<body>
+<svg id="main-svg" viewBox="0 0 640 640"></svg>
+<div id="tooltip"></div>
+
+<script>
+// ── DATA (same as chord_diagram_v2.html) ──
+const ALL_FLOWS = [
+  ["CAN","USA",109000000000],["RUS","CHN",53000000000],["RUS","NLD",40000000000],
+  ["SAU","CHN",38000000000],["RUS","DEU",35000000000],["IRQ","CHN",30000000000],
+  ["NOR","DEU",28000000000],["SAU","JPN",25000000000],["SAU","IND",24000000000],
+  ["RUS","BLR",22000000000],["AUS","JPN",21000000000],["SAU","KOR",20000000000],
+  ["QAT","CHN",19000000000],["RUS","POL",17000000000],["NGA","IND",16000000000],
+  ["USA","MEX",14500000000],["IRN","CHN",14000000000],["RUS","FIN",13500000000],
+  ["NOR","NLD",13000000000],["QAT","JPN",12500000000],["AZE","ITA",12000000000],
+  ["RUS","CZE",11500000000],["COL","USA",11000000000],["NGA","NLD",10500000000],
+  ["SAU","USA",10000000000],["IRQ","IND",9800000000],["RUS","TUR",9600000000],
+  ["QAT","KOR",9400000000],["AUS","KOR",9200000000],["MEX","USA",9000000000],
+  ["RUS","HUN",8800000000],["KWT","CHN",8600000000],["SAU","NLD",8400000000],
+  ["IRQ","ITA",8200000000],["NOR","FRA",8000000000],["TTO","USA",7800000000],
+  ["BRA","CHN",7600000000],["EQG","CHN",7400000000],["GBR","NLD",7200000000],
+  ["RUS","SVK",7000000000],["SAU","GBR",6800000000],["LBY","ITA",6600000000],
+  ["NGA","FRA",6400000000],["KAZ","CHN",6200000000],["RUS","AUT",6000000000],
+  ["ANG","CHN",5900000000],["OMN","CHN",5800000000]
+];
+
+const REGIONS = {
+  CAN:"Americas",USA:"Americas",MEX:"Americas",COL:"Americas",TTO:"Americas",BRA:"Americas",
+  RUS:"Europe/CIS",NOR:"Europe/CIS",GBR:"Europe/CIS",NLD:"Europe/CIS",DEU:"Europe/CIS",
+  POL:"Europe/CIS",FIN:"Europe/CIS",BLR:"Europe/CIS",CZE:"Europe/CIS",HUN:"Europe/CIS",
+  SVK:"Europe/CIS",AUT:"Europe/CIS",FRA:"Europe/CIS",ITA:"Europe/CIS",
+  SAU:"Middle East",IRQ:"Middle East",IRN:"Middle East",QAT:"Middle East",KWT:"Middle East",OMN:"Middle East",
+  CHN:"Asia/Pacific",JPN:"Asia/Pacific",KOR:"Asia/Pacific",IND:"Asia/Pacific",AUS:"Asia/Pacific",TUR:"Asia/Pacific",
+  NGA:"Africa",KAZ:"Africa",AZE:"Africa",EQG:"Africa",LBY:"Africa",ANG:"Africa"
+};
+
+const COUNTRY_NAMES = {
+  CAN:"Canada",USA:"United States",MEX:"Mexico",COL:"Colombia",TTO:"Trinidad & Tobago",BRA:"Brazil",
+  RUS:"Russia",NOR:"Norway",GBR:"United Kingdom",NLD:"Netherlands",DEU:"Germany",
+  POL:"Poland",FIN:"Finland",BLR:"Belarus",CZE:"Czechia",HUN:"Hungary",
+  SVK:"Slovakia",AUT:"Austria",FRA:"France",ITA:"Italy",
+  SAU:"Saudi Arabia",IRQ:"Iraq",IRN:"Iran",QAT:"Qatar",KWT:"Kuwait",OMN:"Oman",
+  CHN:"China",JPN:"Japan",KOR:"South Korea",IND:"India",AUS:"Australia",TUR:"Turkey",
+  NGA:"Nigeria",KAZ:"Kazakhstan",AZE:"Azerbaijan",EQG:"Eq. Guinea",LBY:"Libya",ANG:"Angola"
+};
+
+const REGION_COLORS = {
+  "Americas":     ["#ef4444","#f87171","#dc2626","#fca5a5","#b91c1c"],
+  "Europe/CIS":   ["#3b82f6","#60a5fa","#2563eb","#93c5fd","#1d4ed8"],
+  "Middle East":  ["#f59e0b","#fbbf24","#d97706","#fcd34d","#b45309"],
+  "Asia/Pacific": ["#10b981","#34d399","#059669","#6ee7b7","#047857"],
+  "Africa":       ["#a855f7","#c084fc","#9333ea","#d8b4fe","#7e22ce"],
+};
+
+// assign colour per node
+const regionCounters = {};
+const assignedColors = {};
+function getNodeColor(n) {
+  if (assignedColors[n]) return assignedColors[n];
+  const reg = REGIONS[n] || "Africa";
+  regionCounters[reg] = regionCounters[reg] || 0;
+  const pal = REGION_COLORS[reg];
+  assignedColors[n] = pal[regionCounters[reg] % pal.length];
+  regionCounters[reg]++;
+  return assignedColors[n];
+}
+[...new Set(ALL_FLOWS.flatMap(d=>[d[0],d[1]]))].forEach(getNodeColor);
+
+// ── FILTERING ──
+function getFilteredFlows(region) {
+  if (region === "All") {
+    const totals = {};
+    ALL_FLOWS.forEach(([s,t,v]) => {
+      totals[s] = (totals[s]||0) + v;
+      totals[t] = (totals[t]||0) + v;
+    });
+    const top15 = Object.entries(totals)
+      .sort((a,b)=>b[1]-a[1]).slice(0,15).map(d=>d[0]);
+    const s = new Set(top15);
+    return ALL_FLOWS.filter(([src,tgt])=>s.has(src)&&s.has(tgt));
+  }
+  const regionNodes = new Set(
+    Object.entries(REGIONS).filter(([,r])=>r===region).map(([n])=>n)
+  );
+  return ALL_FLOWS.filter(([s,t])=>regionNodes.has(s)||regionNodes.has(t));
+}
+
+// ── DRAW CHORD ──
+let focusedNode = null;
+
+function drawChord(region) {
+  const flows = getFilteredFlows(region);
+  const svg = d3.select("#main-svg");
+  svg.selectAll("*").remove();
+
+  const W=640, H=640, CX=W/2, CY=H/2;
+  const outerR=250, innerR=228;
+
+  const nodeSet = [...new Set(flows.flatMap(d=>[d[0],d[1]]))];
+  const N = nodeSet.length;
+  if (N < 2) return;
+
+  const nodeIndex = Object.fromEntries(nodeSet.map((n,i)=>[n,i]));
+
+  // matrix (log scaled)
+  const matrix = Array.from({length:N},()=>new Array(N).fill(0));
+  flows.forEach(([s,t,v])=>{
+    const si=nodeIndex[s], ti=nodeIndex[t];
+    if (si!==undefined && ti!==undefined) matrix[si][ti] += Math.log1p(v);
+  });
+
+  const chord = d3.chord().padAngle(0.022).sortSubgroups(d3.descending);
+  const chords = chord(matrix);
+
+  const arcGen  = d3.arc().innerRadius(innerR).outerRadius(outerR);
+  const ribbonGen = d3.ribbon().radius(innerR-1);
+
+  const g = svg.append("g").attr("transform",`translate(${CX},${CY})`);
+
+  // background circle
+  g.append("circle").attr("r",outerR+50)
+   .attr("fill","rgba(255,255,255,0.02)");
+
+  // ribbons
+  const ribbonG = g.append("g");
+
+  ribbonG.selectAll("path")
+    .data(chords).join("path")
+    .attr("d", ribbonGen)
+    .attr("fill", d => assignedColors[nodeSet[d.source.index]])
+    .attr("stroke", "rgba(255,255,255,0.08)")
+    .attr("stroke-width", 0.5)
+    .attr("opacity", 0)
+    .transition().duration(600).delay((_,i)=>i*12)
+    .attr("opacity", 0.5);
+
+  ribbonG.selectAll("path")
+    .on("mouseover", function(event,d) {
+      const src = nodeSet[d.source.index];
+      const tgt = nodeSet[d.target.index];
+      const flow = flows.find(([s,t])=>(s===src&&t===tgt)||(s===tgt&&t===src));
+      const val = flow ? flow[2] : 0;
+      const fmt = `$${(val/1e9).toFixed(1)}B`;
+      d3.select(this).attr("opacity",0.9).attr("stroke","white").attr("stroke-width",1.5);
+      const tt = document.getElementById("tooltip");
+      tt.style.display="block";
+      tt.innerHTML=`
+        <div class="tt-route">${COUNTRY_NAMES[src]||src} → ${COUNTRY_NAMES[tgt]||tgt}</div>
+        <div class="tt-val">${fmt}</div>
+        <div class="tt-region">${REGIONS[src]||''}</div>
+      `;
+      tt.style.left=(event.clientX+16)+"px";
+      tt.style.top=(event.clientY-20)+"px";
+    })
+    .on("mousemove",function(event){
+      const tt=document.getElementById("tooltip");
+      tt.style.left=(event.clientX+16)+"px";
+      tt.style.top=(event.clientY-20)+"px";
+    })
+    .on("mouseout",function(){
+      applyFocus();
+      document.getElementById("tooltip").style.display="none";
+    });
+
+  // arcs
+  const arcG = g.append("g");
+  const groups = arcG.selectAll("g")
+    .data(chords.groups).join("g")
+    .style("cursor","pointer")
+    .on("click",function(event,d){
+      const name = nodeSet[d.index];
+      focusedNode = focusedNode===name ? null : name;
+      applyFocus();
+    });
+
+  groups.append("path")
+    .attr("d", arcGen)
+    .attr("fill", d => assignedColors[nodeSet[d.index]])
+    .attr("stroke", d => assignedColors[nodeSet[d.index]])
+    .attr("stroke-width",0.5)
+    .attr("opacity",0)
+    .transition().duration(500)
+    .attr("opacity",1);
+
+  // outer ring accent
+  groups.append("path")
+    .attr("d", d3.arc().innerRadius(outerR+4).outerRadius(outerR+8))
+    .attr("fill", d => assignedColors[nodeSet[d.index]])
+    .attr("opacity",0.25);
+
+  // labels
+  groups.append("text")
+    .each(d=>{ d.angle = (d.startAngle+d.endAngle)/2; })
+    .attr("dy","0.35em")
+    .attr("transform", d=>`
+      rotate(${d.angle*180/Math.PI-90})
+      translate(${outerR+16})
+      ${d.angle>Math.PI?"rotate(180)":""}
+    `)
+    .attr("text-anchor", d=>d.angle>Math.PI?"end":"start")
+    .attr("fill", d => assignedColors[nodeSet[d.index]])
+    .attr("font-family","'Inter',monospace")
+    .attr("font-size","10px")
+    .attr("font-weight","500")
+    .attr("letter-spacing","0.04em")
+    .text(d=>COUNTRY_NAMES[nodeSet[d.index]]||nodeSet[d.index]);
+
+  // centre label
+  g.append("text").attr("text-anchor","middle").attr("dy","-0.6em")
+   .attr("fill","rgba(255,255,255,0.15)").attr("font-family","monospace")
+   .attr("font-size","8px").attr("letter-spacing","0.2em")
+   .text("HS27 ENERGY");
+
+  g.append("text").attr("text-anchor","middle").attr("dy","0.9em")
+   .attr("fill","#3b82f6").attr("font-family","'Inter',sans-serif")
+   .attr("font-size","22px").attr("font-weight","300")
+   .text(region==="All"?"Global":region.replace("/"," / "));
+
+  // focus helpers
+  function applyFocus() {
+    if (!focusedNode) {
+      ribbonG.selectAll("path").attr("opacity",0.5).attr("stroke","rgba(255,255,255,0.08)").attr("stroke-width",0.5);
+      arcG.selectAll("path").attr("opacity",1);
+      arcG.selectAll("text").attr("opacity",1);
+      return;
+    }
+    const fi = nodeIndex[focusedNode];
+    ribbonG.selectAll("path")
+      .attr("opacity",d=>d.source.index===fi||d.target.index===fi?0.85:0.04)
+      .attr("stroke",d=>d.source.index===fi||d.target.index===fi?"white":"transparent")
+      .attr("stroke-width",d=>d.source.index===fi||d.target.index===fi?1:0);
+    arcG.selectAll("g path:first-child").attr("opacity",d=>d.index===fi?1:0.2);
+    arcG.selectAll("text").attr("opacity",d=>d.index===fi?1:0.2);
+  }
+
+  focusedNode = null;
+}
+
+// ── READ REGION FROM URL & DRAW ──
+const params = new URLSearchParams(window.location.search);
+const regionParam = params.get("region") || "All";
+
+// Map Dash region names to D3 region names
+const regionMap = {
+  "All": "All",
+  "Americas": "Americas",
+  "Europe / CIS": "Europe/CIS",
+  "Middle East": "Middle East",
+  "Asia / Pacific": "Asia/Pacific",
+  "Africa": "Africa",
+};
+const d3Region = regionMap[regionParam] || regionParam;
+drawChord(d3Region);
+
+// Listen for postMessage from parent (Dash) to update region without reload
+window.addEventListener("message", function(event) {
+  const r = regionMap[event.data] || event.data;
+  drawChord(r);
+});
+</script>
+</body>
+</html>
