@@ -116,7 +116,7 @@ function drawChord(region) {
   svg.selectAll("*").remove();
 
   const W=640, H=640, CX=W/2, CY=H/2;
-  const outerR=250, innerR=228;
+  const outerR=220, innerR=198;
 
   const nodeSet = [...new Set(flows.flatMap(d=>[d[0],d[1]]))];
   const N = nodeSet.length;
@@ -212,20 +212,23 @@ function drawChord(region) {
 
   // labels
   groups.append("text")
-    .each(d=>{ d.angle = (d.startAngle+d.endAngle)/2; })
-    .attr("dy","0.35em")
-    .attr("transform", d=>`
-      rotate(${d.angle*180/Math.PI-90})
-      translate(${outerR+16})
-      ${d.angle>Math.PI?"rotate(180)":""}
-    `)
-    .attr("text-anchor", d=>d.angle>Math.PI?"end":"start")
-    .attr("fill", d => assignedColors[nodeSet[d.index]])
-    .attr("font-family","'Inter',monospace")
-    .attr("font-size","10px")
-    .attr("font-weight","500")
-    .attr("letter-spacing","0.04em")
-    .text(d=>COUNTRY_NAMES[nodeSet[d.index]]||nodeSet[d.index]);
+      .each(d=>{ d.angle = (d.startAngle+d.endAngle)/2; })
+      .attr("dy","0.35em")
+      .attr("transform", d=>`
+        rotate(${d.angle*180/Math.PI-90})
+        translate(${outerR+12})
+        ${d.angle>Math.PI?"rotate(180)":""}
+      `)
+      .attr("text-anchor", d=>d.angle>Math.PI?"end":"start")
+      .attr("fill", "#e8eaf0")
+      .attr("font-family","'Inter',sans-serif")
+      .attr("font-size","11px")
+      .attr("font-weight","600")
+      .attr("letter-spacing","0.02em")
+      .style("paint-order", "stroke")
+      .style("stroke", "#0d0f14")
+      .style("stroke-width", "2.5px")
+      .text(d=>COUNTRY_NAMES[nodeSet[d.index]]||nodeSet[d.index]);
 
   // centre label
   g.append("text").attr("text-anchor","middle").attr("dy","-0.6em")

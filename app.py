@@ -975,7 +975,7 @@ def update_choropleth(region, year, search, flow):
         coastlinecolor='#181c26',
         countrycolor='#181c26',
         projection_type='natural earth',
-        projection_scale = 1.15
+        projection_scale = 1.35
 
     )
 
