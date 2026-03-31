@@ -475,7 +475,7 @@ app.layout = html.Div([
                     'fontSize': '10px', 'color': text3_color, 'marginLeft': '8px'
                 }),
             ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '12px'}),
-            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '500px'}),
+            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '700px'})
         ], style={
             'background': card_color, 'borderRadius': '12px', 'padding': '20px 24px',
             'marginBottom': '16px', 'border': '1px solid rgba(255,255,255,0.03)',
@@ -974,7 +974,9 @@ def update_choropleth(region, year, search, flow):
         showframe=False,
         coastlinecolor='#181c26',
         countrycolor='#181c26',
-        projection_type='natural earth'
+        projection_type='natural earth',
+        projection_scale = 1.15
+
     )
 
     fig.update_layout(
@@ -982,7 +984,8 @@ def update_choropleth(region, year, search, flow):
         plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=0),
         font=dict(color=text3_color, size=9),
-        geo=dict(bgcolor='rgba(0,0,0,0)')
+        geo=dict(bgcolor='rgba(0,0,0,0)'),
+        uirevision='choro-zoom'
     )
 
     return fig
