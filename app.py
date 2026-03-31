@@ -11,10 +11,11 @@ Year: 2026
 """
 
 import dash
-from dash import html, dcc, Input, Output, State, ctx
+from dash import html, dcc, Input, Output, ctx
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from urllib.parse import quote
 
 
 # DASH APP SETUP
@@ -46,9 +47,29 @@ app.index_string = '''
             /* Slider styles */
             .rc-slider-mark-text { color: #8b90a0 !important; font-size: 11px !important; }
             .rc-slider-mark-text-active { color: #e8eaf0 !important; }
-            .rc-slider-rail { background: #1e2330 !important; }
-            .rc-slider-track { background: #3b82f6 !important; }
-            .rc-slider-handle { border-color: #3b82f6 !important; background: #3b82f6 !important; }
+            .rc-slider-rail { background: #1e2330 !important; height: 6px !important; }
+            .rc-slider-track { background: #3b82f6 !important; height: 6px !important; }
+            .rc-slider-handle {
+                border-color: #3b82f6 !important;
+                background: #3b82f6 !important;
+                width: 16px !important;
+                height: 16px !important;
+                margin-top: -5px !important;
+                box-shadow: 0 0 0 4px rgba(59,130,246,0.18) !important;
+            }
+            .topn-wrap {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 360px;
+            }
+            .topn-slider {
+                flex: 1;
+                padding: 0 8px;
+            }
+            .rc-slider {
+                margin: 0 !important;
+            }
 
             /* Visualization tab styles */
             .viz-tab {
@@ -122,7 +143,6 @@ def hex_to_rgba(hex_color, alpha=0.5):
     return f'rgba({r},{g},{b},{alpha})'
 
 
-
 # Story Telling
 insights = {
     'All': {
@@ -185,6 +205,12 @@ def get_name(iso):
     return country_names.get(iso, iso)
 
 
+def flow_terms(flow):
+    """Return clear directional labels for current flow mode."""
+    if flow == 'Export':
+        return 'EXPORTERS', 'IMPORTERS', 'Export value'
+    return 'IMPORTING COUNTRIES', 'PARTNER COUNTRIES', 'Import value'
+
 
 # PLOTLY CONFIGURATION
 sankey_config = {
@@ -203,7 +229,6 @@ choropleth_config = {
 
 # APP LAYOUT AND DESIGN
 app.layout = html.Div([
-    # Hidden store for active visualization tracking
     dcc.Store(id='active-viz', data='sankey'),
 
     # Header
@@ -305,23 +330,30 @@ app.layout = html.Div([
                 'fontFamily': 'monospace', 'fontSize': '14px',
                 'color': text3_color, 'letterSpacing': '0.08em', 'marginRight': '5px'
             }),
-            dcc.Slider(
-                id='top-n-slider',
-                min=10, max=50, step=5, value=20,
-                marks={
-                    10: {'label': '10', 'style': {'color': '#8b90a0'}},
-                    20: {'label': '20', 'style': {'color': '#8b90a0'}},
-                    30: {'label': '30', 'style': {'color': '#8b90a0'}},
-                    40: {'label': '40', 'style': {'color': '#8b90a0'}},
-                    50: {'label': '50', 'style': {'color': '#8b90a0'}},
-                }
-            ),
-            html.Span('Sankey only', style={
+            html.Div([
+                dcc.Slider(
+                    id='top-n-slider',
+                    min=10,
+                    max=50,
+                    step=5,
+                    value=20,
+                    marks={
+                        10: {'label': '10', 'style': {'color': '#8b90a0'}},
+                        20: {'label': '20', 'style': {'color': '#8b90a0'}},
+                        30: {'label': '30', 'style': {'color': '#8b90a0'}},
+                        40: {'label': '40', 'style': {'color': '#8b90a0'}},
+                        50: {'label': '50', 'style': {'color': '#8b90a0'}},
+                    },
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    className='topn-slider'
+                ),
+            ], className='topn-wrap'),
+            html.Span('Sankey + Chord', style={
                 'fontFamily': 'monospace', 'fontSize': '10px',
                 'color': text3_color, 'letterSpacing': '0.06em',
                 'marginLeft': '6px', 'whiteSpace': 'nowrap'
             }),
-        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '260px'}),
+        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '430px'}),
 
         # Search
         html.Div([
@@ -430,23 +462,23 @@ app.layout = html.Div([
         }),
         html.Div([
             html.Button([
-                html.Span( style={'fontSize': '16px'}),
+                html.Span(style={'fontSize': '16px'}),
                 'Sankey Diagram'
             ], id='tab-sankey', n_clicks=0, className='viz-tab active'),
 
             html.Button([
-                html.Span( style={'fontSize': '16px'}),
+                html.Span(style={'fontSize': '16px'}),
                 'Choropleth Map'
             ], id='tab-choropleth', n_clicks=0, className='viz-tab'),
 
             html.Button([
-                html.Span( style={'fontSize': '16px'}),
+                html.Span(style={'fontSize': '16px'}),
                 'Chord Diagram'
             ], id='tab-chord', n_clicks=0, className='viz-tab'),
         ], style={'display': 'flex', 'gap': '12px', 'flexWrap': 'wrap'}),
 
         html.Div([
-            html.Span( style={'fontSize': '14px'}),
+            html.Span(style={'fontSize': '14px'}),
             html.Span(
                 'Switch between visualizations to compare different views of the data. Each technique reveals different patterns.',
                 style={'fontSize': '11px', 'color': text2_color, 'fontStyle': 'italic'}
@@ -464,7 +496,7 @@ app.layout = html.Div([
         html.Div(id='sankey-container', children=[
             html.Div([
                 html.Span('01', style={
-                    'fontFamily': 'monospace', 'fontSize': '10px', 'fontWeight': '600',
+                    'fontFamily': 'monospace', 'fontSize': '15px', 'fontWeight': '600',
                     'color': accent_color, 'background': 'rgba(59,130,246,0.08)',
                     'padding': '2px 8px', 'borderRadius': '4px'
                 }),
@@ -486,7 +518,7 @@ app.layout = html.Div([
         html.Div(id='choro-container', children=[
             html.Div([
                 html.Span('02', style={
-                    'fontFamily': 'monospace', 'fontSize': '10px', 'fontWeight': '600',
+                    'fontFamily': 'monospace', 'fontSize': '15px', 'fontWeight': '600',
                     'color': accent_color, 'background': 'rgba(59,130,246,0.08)',
                     'padding': '2px 8px', 'borderRadius': '4px'
                 }),
@@ -508,7 +540,7 @@ app.layout = html.Div([
         html.Div(id='chord-container', children=[
             html.Div([
                 html.Span('03', style={
-                    'fontFamily': 'monospace', 'fontSize': '10px', 'fontWeight': '600',
+                    'fontFamily': 'monospace', 'fontSize': '15px', 'fontWeight': '600',
                     'color': accent_color, 'background': 'rgba(59,130,246,0.08)',
                     'padding': '2px 8px', 'borderRadius': '4px'
                 }),
@@ -521,7 +553,7 @@ app.layout = html.Div([
             ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '12px'}),
             html.Iframe(
                 id='chord-iframe',
-                src='/assets/chord_embed.html?region=All',
+                src='/assets/chord_embed.html?region=All&topn=20&flow=Export&year=2021',
                 style={
                     'width': '100%', 'height': '480px',
                     'border': 'none', 'borderRadius': '8px'
@@ -648,7 +680,6 @@ app.layout = html.Div([
 })
 
 
-
 # HELPER FUNCTIONS
 def filter_data(region, year, flow='Export'):
     """Filter dataset by region, year, and flow direction."""
@@ -664,19 +695,15 @@ def find_country(search):
     if not search or not search.strip():
         return None
     q = search.strip().upper()
-    # Exact ISO match first
     if q in country_names:
         return q
-    # Partial name match
     for code, name in country_names.items():
         if q in name.upper():
             return code
     return None
 
 
-
 # CALLBACKS
-
 @app.callback(
     [Output('sankey-container', 'style'),
      Output('choro-container', 'style'),
@@ -721,7 +748,7 @@ def toggle_visualization_tabs(sankey_clicks, choro_clicks, chord_clicks):
             'viz-tab', 'viz-tab active', 'viz-tab',
             'choropleth'
         )
-    else:  # chord
+    else:
         return (
             {**base_style, 'display': 'none'},
             {**base_style, 'display': 'none'},
@@ -755,13 +782,11 @@ def update_metrics(region, year, flow):
         top_exp = '—'
         exp_count = 0
 
-    # Format total value
     if total >= 1e12:
         val_str = f'${total / 1e12:.2f}T'
     else:
         val_str = f'${total / 1e9:.0f}B'
 
-    # Calculate year-over-year change
     prev_year = year - 1
     if prev_year >= 2020:
         dff_prev = filter_data(region, prev_year, flow)
@@ -799,30 +824,12 @@ def update_metrics(region, year, flow):
      Input('flow-dropdown', 'value')]
 )
 def update_sankey(region, year, topn, search, flow):
-    """Generate Sankey diagram showing trade flows.
-
-    When a searched country has very little data in the current flow direction
-    (e.g. Saudi Arabia under-reports Exports to UN Comtrade), the callback
-    automatically supplements with mirror-direction data so the country
-    always appears visibly when searched.
-    """
+    """Generate Sankey diagram showing trade flows."""
     dff = filter_data(region, year, flow)
     dff = dff.nlargest(topn, 'Trade_Value_USD')
-    hl = find_country(search)
+    searched_country = find_country(search)
 
-    # If searched country is invisible in current flow, pull its rows from mirror direction.
-    # Fixes countries like SAU that under-report Exports to UN Comtrade.
-    if hl:
-        hl_visible = ((dff['Exporter'] == hl) | (dff['Importer'] == hl)).any()
-        if not hl_visible:
-            mirror_flow = 'Import' if flow == 'Export' else 'Export'
-            dff_mirror = filter_data(region, year, mirror_flow)
-            dff_mirror = dff_mirror[
-                (dff_mirror['Exporter'] == hl) | (dff_mirror['Importer'] == hl)
-            ].nlargest(min(topn, 10), 'Trade_Value_USD')
-            dff = pd.concat([dff, dff_mirror]).drop_duplicates()
-
-    if search and search.strip() and hl is None:
+    if search and search.strip() and searched_country is None:
         fig = go.Figure()
         fig.update_layout(
             paper_bgcolor='rgba(0,0,0,0)',
@@ -835,20 +842,33 @@ def update_sankey(region, year, topn, search, flow):
         )
         return fig
 
+    if searched_country:
+        country_rows = dff[(dff['Exporter'] == searched_country) | (dff['Importer'] == searched_country)]
+        if country_rows.empty:
+            mirror_flow = 'Import' if flow == 'Export' else 'Export'
+            dff_mirror = filter_data(region, year, mirror_flow)
+            dff_mirror = dff_mirror[
+                (dff_mirror['Exporter'] == searched_country) | (dff_mirror['Importer'] == searched_country)
+            ].nlargest(min(topn, 10), 'Trade_Value_USD')
+            dff = pd.concat([dff, dff_mirror]).drop_duplicates()
+
     if dff.empty:
         fig = go.Figure()
-        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
         return fig
 
-    # Build node lists
+    left_label, right_label, value_label = flow_terms(flow)
+
     exporters = dff['Exporter'].unique().tolist()
     importers = dff['Importer'].unique().tolist()
-    labels = [get_name(e) for e in exporters] + [get_name(i) + ' ' for i in importers]
+    labels = [get_name(e) for e in exporters] + [get_name(i) for i in importers]
     exp_idx = {e: i for i, e in enumerate(exporters)}
     imp_idx = {i: len(exporters) + j for j, i in enumerate(importers)}
 
-    # Build links
-    sources, targets, values, colors = [], [], [], []
+    sources, targets, values, colors, customdata = [], [], [], [], []
     for _, row in dff.iterrows():
         src = exp_idx.get(row['Exporter'])
         tgt = imp_idx.get(row['Importer'])
@@ -856,48 +876,81 @@ def update_sankey(region, year, topn, search, flow):
             sources.append(src)
             targets.append(tgt)
             values.append(np.sqrt(row['Trade_Value_USD']))
-            c = regions_colors.get(row['Exporter_Region'], '#666')
-            if hl and row['Exporter'] != hl and row['Importer'] != hl:
-                colors.append('rgba(255,255,255,0.03)')
-            else:
-                colors.append(hex_to_rgba(c, 0.45))
+            colors.append(hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), 0.50))
+            customdata.append([
+                row['Trade_Value_USD'],
+                get_name(row['Exporter']),
+                get_name(row['Importer'])
+            ])
 
-    # Color nodes
     node_colors = []
     for e in exporters:
-        if e in dff['Exporter'].values:
-            reg = dff[dff['Exporter'] == e]['Exporter_Region'].iloc[0]
-        else:
-            reg = 'Africa'
-        c = regions_colors.get(reg, '#666')
-        if hl and e != hl:
-            node_colors.append('rgba(255,255,255,0.1)')
-        else:
-            node_colors.append(c)
+        reg = dff[dff['Exporter'] == e]['Exporter_Region'].iloc[0] if e in dff['Exporter'].values else 'Africa'
+        node_colors.append(regions_colors.get(reg, '#666'))
 
     for i in importers:
-        if i in dff['Importer'].values:
-            reg = dff[dff['Importer'] == i]['Importer_Region'].iloc[0]
-        else:
-            reg = 'Africa'
-        c = regions_colors.get(reg, '#666')
-        if hl and i != hl:
-            node_colors.append('rgba(255,255,255,0.1)')
-        else:
-            node_colors.append(c)
+        reg = dff[dff['Importer'] == i]['Importer_Region'].iloc[0] if i in dff['Importer'].values else 'Africa'
+        node_colors.append(regions_colors.get(reg, '#666'))
 
     fig = go.Figure(go.Sankey(
         arrangement='snap',
-        node=dict(pad=8, thickness=10, line=dict(width=0), label=labels, color=node_colors),
-        link=dict(source=sources, target=targets, value=values, color=colors,
-                  hovertemplate='%{source.label} → %{target.label}<br>%{value:,.0f}<extra></extra>')
+        node=dict(
+            pad=8,
+            thickness=10,
+            line=dict(width=0),
+            label=labels,
+            color=node_colors,
+            hovertemplate='Country: %{label}<extra></extra>'
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            color=colors,
+            customdata=customdata,
+            hovertemplate=(
+                'Exporter: %{customdata[1]}<br>'
+                'Importer: %{customdata[2]}<br>'
+                f'{value_label}: $%{{customdata[0]:,.0f}}<extra></extra>'
+            )
+        )
     ))
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color=text1_color, size=11),
-        margin=dict(l=10, r=10, t=10, b=10)
+        margin=dict(l=10, r=10, t=65, b=10),
+        annotations=[
+            dict(
+                text='EXPORTERS',
+                x=0.01,
+                y=1.04,
+                xref='paper',
+                yref='paper',
+                showarrow=False,
+                xanchor='left',
+                yanchor='bottom',
+                font=dict(color=accent_color, size=11),
+                bgcolor='rgba(59,130,246,0.08)',
+                bordercolor='rgba(59,130,246,0.2)',
+                borderpad=4
+            ),
+            dict(
+                text='IMPORTERS',
+                x=0.99,
+                y=1.04,
+                xref='paper',
+                yref='paper',
+                showarrow=False,
+                xanchor='right',
+                yanchor='bottom',
+                font=dict(color=accent_color, size=11),
+                bgcolor='rgba(59,130,246,0.08)',
+                bordercolor='rgba(59,130,246,0.2)',
+                borderpad=4
+            )
+        ]
     )
 
     return fig
@@ -911,27 +964,18 @@ def update_sankey(region, year, topn, search, flow):
      Input('flow-dropdown', 'value')]
 )
 def update_choropleth(region, year, search, flow):
-    """Generate choropleth map showing geographic distribution.
-
-    UN Comtrade schema note: in both Export and Import rows,
-    'Exporter' is always the REPORTING country.
-    - Flow=Export → Exporter is the actual exporter → group by Exporter
-    - Flow=Import → Exporter is the actual importer (the country buying) → group by Exporter
-    Grouping by 'Exporter' in both cases correctly colours the countries
-    that are doing the exporting (Export flow) or doing the importing (Import flow).
-    """
+    """Generate choropleth map showing geographic distribution."""
     dff = filter_data(region, year, flow)
-    hl = find_country(search)
+    searched_country = find_country(search)
 
-    # Always group by the reporting country ('Exporter' column in both flow directions)
     group_col = 'Exporter'
-
     totals = dff.groupby(group_col)['Trade_Value_USD'].sum().reset_index()
     totals.columns = ['ISO', 'Value']
     totals['log_val'] = np.log10(totals['Value'].clip(lower=1))
-    flow_label = 'Export value' if flow == 'Export' else 'Import value'
+    _, _, value_label = flow_terms(flow)
+
     totals['text'] = totals.apply(
-        lambda r: f"{get_name(r['ISO'])} ({flow_label}): ${r['Value'] / 1e9:.1f}B",
+        lambda r: f"{get_name(r['ISO'])}<br>{value_label}: ${r['Value'] / 1e9:.1f}B",
         axis=1
     )
 
@@ -943,7 +987,7 @@ def update_choropleth(region, year, search, flow):
         colorscale='YlOrRd',
         showscale=True,
         colorbar=dict(
-            title=dict(text=f'{flow_label} (log10 USD)', font=dict(size=9, color=text2_color)),
+            title=dict(text=f'{value_label} (log10 USD)', font=dict(size=9, color=text2_color)),
             tickfont=dict(size=9, color=text2_color),
             thickness=8,
             len=0.4
@@ -952,17 +996,14 @@ def update_choropleth(region, year, search, flow):
         marker_line_color='#181c26'
     ))
 
-    if hl and hl in totals['ISO'].values:
-        hl_row = totals[totals['ISO'] == hl].iloc[0]
-        fig.add_trace(go.Choropleth(
-            locations=[hl],
-            z=[hl_row['log_val']],
-            text=[hl_row['text']],
-            hoverinfo='text',
-            colorscale=[[0, accent_color], [1, accent_color]],
-            showscale=False,
-            marker_line_width=2.5,
-            marker_line_color=accent_color,
+    if searched_country and searched_country in totals['ISO'].values:
+        fig.add_trace(go.Scattergeo(
+            locations=[searched_country],
+            locationmode='ISO-3',
+            mode='markers',
+            marker=dict(size=10, color=accent_color, line=dict(color='white', width=1.5)),
+            hoverinfo='skip',
+            showlegend=False
         ))
 
     fig.update_geos(
@@ -975,17 +1016,24 @@ def update_choropleth(region, year, search, flow):
         coastlinecolor='#181c26',
         countrycolor='#181c26',
         projection_type='natural earth',
-        projection_scale = 1.35
-
+        projection_scale=1.35
     )
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=0, b=0),
+        margin=dict(l=0, r=0, t=40, b=0),
         font=dict(color=text3_color, size=9),
         geo=dict(bgcolor='rgba(0,0,0,0)'),
-        uirevision='choro-zoom'
+        uirevision='choro-zoom',
+        annotations=[
+            dict(
+                text=f'Colour intensity = higher {value_label.lower()}',
+                x=0.02, y=1.06, xref='paper', yref='paper',
+                showarrow=False, font=dict(color=text2_color, size=11),
+                align='left'
+            )
+        ]
     )
 
     return fig
@@ -993,11 +1041,20 @@ def update_choropleth(region, year, search, flow):
 
 @app.callback(
     Output('chord-iframe', 'src'),
-    [Input('region-filter', 'value')]
+    [Input('region-filter', 'value'),
+     Input('top-n-slider', 'value'),
+     Input('flow-dropdown', 'value'),
+     Input('year-dropdown', 'value')]
 )
-def update_chord_iframe(region):
-    """Update chord diagram region filter."""
-    return f'/assets/chord_embed.html?region={region}'
+def update_chord_iframe(region, topn, flow, year):
+    """Update chord diagram region, top-n, flow, and year."""
+    return (
+        f'/assets/chord_embed.html'
+        f'?region={quote(region)}'
+        f'&topn={topn}'
+        f'&flow={quote(flow)}'
+        f'&year={year}'
+    )
 
 
 @app.callback(

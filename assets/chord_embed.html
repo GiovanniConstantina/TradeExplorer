@@ -7,13 +7,35 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background: #0d0f14; overflow: hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
-#main-svg { display:block; max-width:100%; max-height:100vh; }
+body {
+  background: #0d0f14;
+  overflow: hidden;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+#main-svg {
+  display:block;
+  max-width:100%;
+  max-height:100vh;
+  cursor: grab;
+}
+#main-svg:active {
+  cursor: grabbing;
+}
 #tooltip {
-  display:none; position:fixed; z-index:100;
-  background:rgba(13,15,20,0.95); border:1px solid rgba(255,255,255,0.1);
-  border-radius:6px; padding:10px 14px; pointer-events:none;
-  font-family:'Inter',sans-serif; font-size:12px; color:#e8eaf0;
+  display:none;
+  position:fixed;
+  z-index:100;
+  background:rgba(13,15,20,0.95);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px;
+  padding:10px 14px;
+  pointer-events:none;
+  font-family:'Inter',sans-serif;
+  font-size:12px;
+  color:#e8eaf0;
   box-shadow:0 4px 20px rgba(0,0,0,0.5);
 }
 .tt-route { font-weight:600; margin-bottom:4px; font-size:13px; }
@@ -26,7 +48,6 @@ body { background: #0d0f14; overflow: hidden; display:flex; justify-content:cent
 <div id="tooltip"></div>
 
 <script>
-// ── DATA (same as chord_diagram_v2.html) ──
 const ALL_FLOWS = [
   ["CAN","USA",109000000000],["RUS","CHN",53000000000],["RUS","NLD",40000000000],
   ["SAU","CHN",38000000000],["RUS","DEU",35000000000],["IRQ","CHN",30000000000],
@@ -74,7 +95,6 @@ const REGION_COLORS = {
   "Africa":       ["#a855f7","#c084fc","#9333ea","#d8b4fe","#7e22ce"],
 };
 
-// assign colour per node
 const regionCounters = {};
 const assignedColors = {};
 function getNodeColor(n) {
@@ -86,28 +106,29 @@ function getNodeColor(n) {
   regionCounters[reg]++;
   return assignedColors[n];
 }
-[...new Set(ALL_FLOWS.flatMap(d=>[d[0],d[1]]))].forEach(getNodeColor);
+[...new Set(ALL_FLOWS.flatMap(d => [d[0], d[1]]))].forEach(getNodeColor);
 
-// ── FILTERING ──
 function getFilteredFlows(region) {
   if (region === "All") {
     const totals = {};
     ALL_FLOWS.forEach(([s,t,v]) => {
-      totals[s] = (totals[s]||0) + v;
-      totals[t] = (totals[t]||0) + v;
+      totals[s] = (totals[s] || 0) + v;
+      totals[t] = (totals[t] || 0) + v;
     });
     const top15 = Object.entries(totals)
-      .sort((a,b)=>b[1]-a[1]).slice(0,15).map(d=>d[0]);
+      .sort((a,b) => b[1] - a[1])
+      .slice(0,15)
+      .map(d => d[0]);
     const s = new Set(top15);
-    return ALL_FLOWS.filter(([src,tgt])=>s.has(src)&&s.has(tgt));
+    return ALL_FLOWS.filter(([src,tgt]) => s.has(src) && s.has(tgt));
   }
+
   const regionNodes = new Set(
-    Object.entries(REGIONS).filter(([,r])=>r===region).map(([n])=>n)
+    Object.entries(REGIONS).filter(([,r]) => r === region).map(([n]) => n)
   );
-  return ALL_FLOWS.filter(([s,t])=>regionNodes.has(s)||regionNodes.has(t));
+  return ALL_FLOWS.filter(([s,t]) => regionNodes.has(s) || regionNodes.has(t));
 }
 
-// ── DRAW CHORD ──
 let focusedNode = null;
 
 function drawChord(region) {
@@ -115,83 +136,101 @@ function drawChord(region) {
   const svg = d3.select("#main-svg");
   svg.selectAll("*").remove();
 
-  const W=640, H=640, CX=W/2, CY=H/2;
-  const outerR=220, innerR=198;
+  const W = 640, H = 640, CX = W / 2, CY = H / 2;
+  const outerR = 220, innerR = 198;
 
-  const nodeSet = [...new Set(flows.flatMap(d=>[d[0],d[1]]))];
+  const nodeSet = [...new Set(flows.flatMap(d => [d[0], d[1]]))];
   const N = nodeSet.length;
   if (N < 2) return;
 
-  const nodeIndex = Object.fromEntries(nodeSet.map((n,i)=>[n,i]));
+  const nodeIndex = Object.fromEntries(nodeSet.map((n,i) => [n,i]));
 
-  // matrix (log scaled)
-  const matrix = Array.from({length:N},()=>new Array(N).fill(0));
-  flows.forEach(([s,t,v])=>{
-    const si=nodeIndex[s], ti=nodeIndex[t];
-    if (si!==undefined && ti!==undefined) matrix[si][ti] += Math.log1p(v);
+  const matrix = Array.from({length:N}, () => new Array(N).fill(0));
+  flows.forEach(([s,t,v]) => {
+    const si = nodeIndex[s], ti = nodeIndex[t];
+    if (si !== undefined && ti !== undefined) {
+      matrix[si][ti] += Math.log1p(v);
+    }
   });
 
   const chord = d3.chord().padAngle(0.022).sortSubgroups(d3.descending);
   const chords = chord(matrix);
 
-  const arcGen  = d3.arc().innerRadius(innerR).outerRadius(outerR);
-  const ribbonGen = d3.ribbon().radius(innerR-1);
+  const arcGen = d3.arc().innerRadius(innerR).outerRadius(outerR);
+  const ribbonGen = d3.ribbon().radius(innerR - 1);
 
-  const g = svg.append("g").attr("transform",`translate(${CX},${CY})`);
+  const zoomLayer = svg.append("g");
+  const g = zoomLayer.append("g").attr("transform", `translate(${CX},${CY})`);
 
-  // background circle
-  g.append("circle").attr("r",outerR+50)
-   .attr("fill","rgba(255,255,255,0.02)");
+  const zoom = d3.zoom()
+    .scaleExtent([0.8, 3])
+    .on("zoom", (event) => {
+      zoomLayer.attr("transform", event.transform);
+    });
 
-  // ribbons
+  svg.call(zoom);
+
+  g.append("circle")
+    .attr("r", outerR + 50)
+    .attr("fill", "rgba(255,255,255,0.02)");
+
   const ribbonG = g.append("g");
 
   ribbonG.selectAll("path")
-    .data(chords).join("path")
+    .data(chords)
+    .join("path")
     .attr("d", ribbonGen)
     .attr("fill", d => assignedColors[nodeSet[d.source.index]])
     .attr("stroke", "rgba(255,255,255,0.08)")
     .attr("stroke-width", 0.5)
     .attr("opacity", 0)
-    .transition().duration(600).delay((_,i)=>i*12)
+    .transition()
+    .duration(600)
+    .delay((_,i) => i * 12)
     .attr("opacity", 0.5);
 
   ribbonG.selectAll("path")
-    .on("mouseover", function(event,d) {
+    .on("mouseover", function(event, d) {
       const src = nodeSet[d.source.index];
       const tgt = nodeSet[d.target.index];
-      const flow = flows.find(([s,t])=>(s===src&&t===tgt)||(s===tgt&&t===src));
+      const flow = flows.find(([s,t]) => s === src && t === tgt);
       const val = flow ? flow[2] : 0;
-      const fmt = `$${(val/1e9).toFixed(1)}B`;
-      d3.select(this).attr("opacity",0.9).attr("stroke","white").attr("stroke-width",1.5);
+      const fmt = `$${(val / 1e9).toFixed(1)}B`;
+
+      d3.select(this)
+        .attr("opacity", 0.9)
+        .attr("stroke", "white")
+        .attr("stroke-width", 1.5);
+
       const tt = document.getElementById("tooltip");
-      tt.style.display="block";
-      tt.innerHTML=`
-        <div class="tt-route">${COUNTRY_NAMES[src]||src} → ${COUNTRY_NAMES[tgt]||tgt}</div>
+      tt.style.display = "block";
+      tt.innerHTML = `
+        <div class="tt-route">${COUNTRY_NAMES[src] || src} → ${COUNTRY_NAMES[tgt] || tgt}</div>
         <div class="tt-val">${fmt}</div>
-        <div class="tt-region">${REGIONS[src]||''}</div>
+        <div class="tt-region">${REGIONS[src] || ''}</div>
       `;
-      tt.style.left=(event.clientX+16)+"px";
-      tt.style.top=(event.clientY-20)+"px";
+      tt.style.left = (event.clientX + 16) + "px";
+      tt.style.top = (event.clientY - 20) + "px";
     })
-    .on("mousemove",function(event){
-      const tt=document.getElementById("tooltip");
-      tt.style.left=(event.clientX+16)+"px";
-      tt.style.top=(event.clientY-20)+"px";
+    .on("mousemove", function(event) {
+      const tt = document.getElementById("tooltip");
+      tt.style.left = (event.clientX + 16) + "px";
+      tt.style.top = (event.clientY - 20) + "px";
     })
-    .on("mouseout",function(){
+    .on("mouseout", function() {
       applyFocus();
-      document.getElementById("tooltip").style.display="none";
+      document.getElementById("tooltip").style.display = "none";
     });
 
-  // arcs
   const arcG = g.append("g");
+
   const groups = arcG.selectAll("g")
-    .data(chords.groups).join("g")
-    .style("cursor","pointer")
-    .on("click",function(event,d){
+    .data(chords.groups)
+    .join("g")
+    .style("cursor", "pointer")
+    .on("click", function(event, d) {
       const name = nodeSet[d.index];
-      focusedNode = focusedNode===name ? null : name;
+      focusedNode = focusedNode === name ? null : name;
       applyFocus();
     });
 
@@ -199,73 +238,95 @@ function drawChord(region) {
     .attr("d", arcGen)
     .attr("fill", d => assignedColors[nodeSet[d.index]])
     .attr("stroke", d => assignedColors[nodeSet[d.index]])
-    .attr("stroke-width",0.5)
-    .attr("opacity",0)
-    .transition().duration(500)
-    .attr("opacity",1);
+    .attr("stroke-width", 0.5)
+    .attr("opacity", 0)
+    .transition()
+    .duration(500)
+    .attr("opacity", 1);
 
-  // outer ring accent
   groups.append("path")
-    .attr("d", d3.arc().innerRadius(outerR+4).outerRadius(outerR+8))
+    .attr("d", d3.arc().innerRadius(outerR + 4).outerRadius(outerR + 8))
     .attr("fill", d => assignedColors[nodeSet[d.index]])
-    .attr("opacity",0.25);
+    .attr("opacity", 0.25);
 
-  // labels
   groups.append("text")
-      .each(d=>{ d.angle = (d.startAngle+d.endAngle)/2; })
-      .attr("dy","0.35em")
-      .attr("transform", d=>`
-        rotate(${d.angle*180/Math.PI-90})
-        translate(${outerR+12})
-        ${d.angle>Math.PI?"rotate(180)":""}
-      `)
-      .attr("text-anchor", d=>d.angle>Math.PI?"end":"start")
-      .attr("fill", "#e8eaf0")
-      .attr("font-family","'Inter',sans-serif")
-      .attr("font-size","11px")
-      .attr("font-weight","600")
-      .attr("letter-spacing","0.02em")
-      .style("paint-order", "stroke")
-      .style("stroke", "#0d0f14")
-      .style("stroke-width", "2.5px")
-      .text(d=>COUNTRY_NAMES[nodeSet[d.index]]||nodeSet[d.index]);
+    .each(d => { d.angle = (d.startAngle + d.endAngle) / 2; })
+    .attr("dy", "0.35em")
+    .attr("transform", d => `
+      rotate(${d.angle * 180 / Math.PI - 90})
+      translate(${outerR + 12})
+      ${d.angle > Math.PI ? "rotate(180)" : ""}
+    `)
+    .attr("text-anchor", d => d.angle > Math.PI ? "end" : "start")
+    .attr("fill", "#e8eaf0")
+    .attr("font-family", "'Inter',sans-serif")
+    .attr("font-size", "11px")
+    .attr("font-weight", "600")
+    .attr("letter-spacing", "0.02em")
+    .style("paint-order", "stroke")
+    .style("stroke", "#0d0f14")
+    .style("stroke-width", "2.5px")
+    .text(d => COUNTRY_NAMES[nodeSet[d.index]] || nodeSet[d.index]);
 
-  // centre label
-  g.append("text").attr("text-anchor","middle").attr("dy","-0.6em")
-   .attr("fill","rgba(255,255,255,0.15)").attr("font-family","monospace")
-   .attr("font-size","8px").attr("letter-spacing","0.2em")
-   .text("HS27 ENERGY");
+  g.append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "-0.9em")
+    .attr("fill", "rgba(255,255,255,0.15)")
+    .attr("font-family", "monospace")
+    .attr("font-size", "8px")
+    .attr("letter-spacing", "0.2em")
+    .text("HS27 ENERGY");
 
-  g.append("text").attr("text-anchor","middle").attr("dy","0.9em")
-   .attr("fill","#3b82f6").attr("font-family","'Inter',sans-serif")
-   .attr("font-size","22px").attr("font-weight","300")
-   .text(region==="All"?"Global":region.replace("/"," / "));
+  g.append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "0.7em")
+    .attr("fill", "#3b82f6")
+    .attr("font-family", "'Inter',sans-serif")
+    .attr("font-size", "22px")
+    .attr("font-weight", "300")
+    .text(region === "All" ? "Global" : region.replace("/", " / "));
 
-  // focus helpers
+  g.append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "2.5em")
+    .attr("fill", "rgba(255,255,255,0.45)")
+    .attr("font-family", "monospace")
+    .attr("font-size", "9px")
+    .attr("letter-spacing", "0.08em")
+    .text("RIBBONS: EXPORTER → IMPORTER");
+
   function applyFocus() {
     if (!focusedNode) {
-      ribbonG.selectAll("path").attr("opacity",0.5).attr("stroke","rgba(255,255,255,0.08)").attr("stroke-width",0.5);
-      arcG.selectAll("path").attr("opacity",1);
-      arcG.selectAll("text").attr("opacity",1);
+      ribbonG.selectAll("path")
+        .attr("opacity", 0.5)
+        .attr("stroke", "rgba(255,255,255,0.08)")
+        .attr("stroke-width", 0.5);
+
+      arcG.selectAll("path").attr("opacity", 1);
+      arcG.selectAll("text").attr("opacity", 1);
       return;
     }
+
     const fi = nodeIndex[focusedNode];
+
     ribbonG.selectAll("path")
-      .attr("opacity",d=>d.source.index===fi||d.target.index===fi?0.85:0.04)
-      .attr("stroke",d=>d.source.index===fi||d.target.index===fi?"white":"transparent")
-      .attr("stroke-width",d=>d.source.index===fi||d.target.index===fi?1:0);
-    arcG.selectAll("g path:first-child").attr("opacity",d=>d.index===fi?1:0.2);
-    arcG.selectAll("text").attr("opacity",d=>d.index===fi?1:0.2);
+      .attr("opacity", d => d.source.index === fi || d.target.index === fi ? 0.85 : 0.04)
+      .attr("stroke", d => d.source.index === fi || d.target.index === fi ? "white" : "transparent")
+      .attr("stroke-width", d => d.source.index === fi || d.target.index === fi ? 1 : 0);
+
+    arcG.selectAll("g path:first-child")
+      .attr("opacity", d => d.index === fi ? 1 : 0.2);
+
+    arcG.selectAll("text")
+      .attr("opacity", d => d.index === fi ? 1 : 0.2);
   }
 
   focusedNode = null;
 }
 
-// ── READ REGION FROM URL & DRAW ──
 const params = new URLSearchParams(window.location.search);
 const regionParam = params.get("region") || "All";
 
-// Map Dash region names to D3 region names
 const regionMap = {
   "All": "All",
   "Americas": "Americas",
@@ -274,10 +335,10 @@ const regionMap = {
   "Asia / Pacific": "Asia/Pacific",
   "Africa": "Africa",
 };
+
 const d3Region = regionMap[regionParam] || regionParam;
 drawChord(d3Region);
 
-// Listen for postMessage from parent (Dash) to update region without reload
 window.addEventListener("message", function(event) {
   const r = regionMap[event.data] || event.data;
   drawChord(r);
