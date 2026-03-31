@@ -316,7 +316,12 @@ app.layout = html.Div([
                     50: {'label': '50', 'style': {'color': '#8b90a0'}},
                 }
             ),
-        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '220px'}),
+            html.Span('Sankey only', style={
+                'fontFamily': 'monospace', 'fontSize': '10px',
+                'color': text3_color, 'letterSpacing': '0.06em',
+                'marginLeft': '6px', 'whiteSpace': 'nowrap'
+            }),
+        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px', 'width': '260px'}),
 
         # Search
         html.Div([
@@ -655,12 +660,16 @@ def filter_data(region, year, flow='Export'):
 
 
 def find_country(search):
-    """Find country ISO code from search term."""
+    """Find country ISO code from search term (case-insensitive, partial name match)."""
     if not search or not search.strip():
         return None
     q = search.strip().upper()
+    # Exact ISO match first
+    if q in country_names:
+        return q
+    # Partial name match
     for code, name in country_names.items():
-        if code.upper() == q or q in name.upper():
+        if q in name.upper():
             return code
     return None
 
@@ -790,10 +799,28 @@ def update_metrics(region, year, flow):
      Input('flow-dropdown', 'value')]
 )
 def update_sankey(region, year, topn, search, flow):
-    """Generate Sankey diagram showing trade flows."""
+    """Generate Sankey diagram showing trade flows.
+
+    When a searched country has very little data in the current flow direction
+    (e.g. Saudi Arabia under-reports Exports to UN Comtrade), the callback
+    automatically supplements with mirror-direction data so the country
+    always appears visibly when searched.
+    """
     dff = filter_data(region, year, flow)
     dff = dff.nlargest(topn, 'Trade_Value_USD')
     hl = find_country(search)
+
+    # If searched country is invisible in current flow, pull its rows from mirror direction.
+    # Fixes countries like SAU that under-report Exports to UN Comtrade.
+    if hl:
+        hl_visible = ((dff['Exporter'] == hl) | (dff['Importer'] == hl)).any()
+        if not hl_visible:
+            mirror_flow = 'Import' if flow == 'Export' else 'Export'
+            dff_mirror = filter_data(region, year, mirror_flow)
+            dff_mirror = dff_mirror[
+                (dff_mirror['Exporter'] == hl) | (dff_mirror['Importer'] == hl)
+            ].nlargest(min(topn, 10), 'Trade_Value_USD')
+            dff = pd.concat([dff, dff_mirror]).drop_duplicates()
 
     if search and search.strip() and hl is None:
         fig = go.Figure()
@@ -884,20 +911,27 @@ def update_sankey(region, year, topn, search, flow):
      Input('flow-dropdown', 'value')]
 )
 def update_choropleth(region, year, search, flow):
-    """Generate choropleth map showing geographic distribution."""
+    """Generate choropleth map showing geographic distribution.
+
+    UN Comtrade schema note: in both Export and Import rows,
+    'Exporter' is always the REPORTING country.
+    - Flow=Export → Exporter is the actual exporter → group by Exporter
+    - Flow=Import → Exporter is the actual importer (the country buying) → group by Exporter
+    Grouping by 'Exporter' in both cases correctly colours the countries
+    that are doing the exporting (Export flow) or doing the importing (Import flow).
+    """
     dff = filter_data(region, year, flow)
     hl = find_country(search)
 
-    if flow == 'Export':
-        group_col = 'Exporter'
-    else:
-        group_col = 'Importer'
+    # Always group by the reporting country ('Exporter' column in both flow directions)
+    group_col = 'Exporter'
 
     totals = dff.groupby(group_col)['Trade_Value_USD'].sum().reset_index()
     totals.columns = ['ISO', 'Value']
     totals['log_val'] = np.log10(totals['Value'].clip(lower=1))
+    flow_label = 'Export value' if flow == 'Export' else 'Import value'
     totals['text'] = totals.apply(
-        lambda r: f"{get_name(r['ISO'])}: ${r['Value'] / 1e9:.1f}B",
+        lambda r: f"{get_name(r['ISO'])} ({flow_label}): ${r['Value'] / 1e9:.1f}B",
         axis=1
     )
 
@@ -909,7 +943,7 @@ def update_choropleth(region, year, search, flow):
         colorscale='YlOrRd',
         showscale=True,
         colorbar=dict(
-            title=dict(text='Trade (log10 USD)', font=dict(size=9, color=text2_color)),
+            title=dict(text=f'{flow_label} (log10 USD)', font=dict(size=9, color=text2_color)),
             tickfont=dict(size=9, color=text2_color),
             thickness=8,
             len=0.4
