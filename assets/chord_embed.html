@@ -239,7 +239,7 @@ function drawChord(region) {
   const chords = chord(matrix);
 
   const arcGen = d3.arc().innerRadius(innerR).outerRadius(outerR);
-  const ribbonGen = d3.ribbon().radius(innerR - 1);
+  const ribbonGen = d3.ribbon().radius(innerR - 4);
 
   const zoomLayer = svg.append("g");
   const g = zoomLayer.append("g").attr("transform", `translate(${CX},${CY})`);
@@ -269,7 +269,7 @@ function drawChord(region) {
     .transition()
     .duration(600)
     .delay((_,i) => i * 12)
-    .attr("opacity", 0.5);
+    .attr("opacity", 0.35);
 
   ribbonG.selectAll("path")
     .on("mouseover", function(event, d) {
@@ -280,7 +280,7 @@ function drawChord(region) {
       const fmt = `$${(val / 1e9).toFixed(1)}B`;
 
       d3.select(this)
-        .attr("opacity", 0.9)
+        .attr("opacity", 0.85)
         .attr("stroke", "white")
         .attr("stroke-width", 1.5);
 
