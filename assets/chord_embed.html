@@ -219,7 +219,7 @@ function drawChord(region) {
   svg.selectAll("*").remove();
 
   const W = 640, H = 640, CX = W / 2, CY = H / 2;
-  const outerR = 220, innerR = 198;
+  const outerR = 220, innerR = 210;
 
   const nodeSet = [...new Set(flows.flatMap(d => [d[0], d[1]]))];
   const N = nodeSet.length;
@@ -235,7 +235,7 @@ function drawChord(region) {
     }
   });
 
-  const chord = d3.chord().padAngle(0.022).sortSubgroups(d3.descending);
+  const chord = d3.chord().padAngle(0.04).sortSubgroups(d3.descending).sortChords(d3.ascending);
   const chords = chord(matrix);
 
   const arcGen = d3.arc().innerRadius(innerR).outerRadius(outerR);
@@ -269,7 +269,7 @@ function drawChord(region) {
     .transition()
     .duration(600)
     .delay((_,i) => i * 12)
-    .attr("opacity", 0.35);
+    .attr("opacity", 0.2);
 
   ribbonG.selectAll("path")
     .on("mouseover", function(event, d) {
@@ -320,23 +320,20 @@ function drawChord(region) {
     .attr("d", arcGen)
     .attr("fill", d => assignedColors[nodeSet[d.index]])
     .attr("stroke", d => assignedColors[nodeSet[d.index]])
-    .attr("stroke-width", 0.5)
+    .attr("stroke-width", 1.5)
     .attr("opacity", 0)
     .transition()
     .duration(500)
     .attr("opacity", 1);
 
-  groups.append("path")
-    .attr("d", d3.arc().innerRadius(outerR + 4).outerRadius(outerR + 8))
-    .attr("fill", d => assignedColors[nodeSet[d.index]])
-    .attr("opacity", 0.25);
+
 
   groups.append("text")
     .each(d => { d.angle = (d.startAngle + d.endAngle) / 2; })
     .attr("dy", "0.35em")
     .attr("transform", d => `
       rotate(${d.angle * 180 / Math.PI - 90})
-      translate(${outerR + 12})
+      translate(${outerR + 16})
       ${d.angle > Math.PI ? "rotate(180)" : ""}
     `)
     .attr("text-anchor", d => d.angle > Math.PI ? "end" : "start")
@@ -350,37 +347,12 @@ function drawChord(region) {
     .style("stroke-width", "2.5px")
     .text(d => COUNTRY_NAMES[nodeSet[d.index]] || nodeSet[d.index]);
 
-  g.append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "-0.9em")
-    .attr("fill", "rgba(255,255,255,0.15)")
-    .attr("font-family", "monospace")
-    .attr("font-size", "8px")
-    .attr("letter-spacing", "0.2em")
-    .text("HS27 ENERGY");
 
-  g.append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.7em")
-    .attr("fill", "#3b82f6")
-    .attr("font-family", "'Inter',sans-serif")
-    .attr("font-size", "22px")
-    .attr("font-weight", "300")
-    .text(region === "All" ? "Global" : region.replace("/", " / "));
-
-  g.append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "2.5em")
-    .attr("fill", "rgba(255,255,255,0.45)")
-    .attr("font-family", "monospace")
-    .attr("font-size", "9px")
-    .attr("letter-spacing", "0.08em")
-    .text("RIBBONS: EXPORTER → IMPORTER");
 
   function applyFocus() {
     if (!focusedNode) {
       ribbonG.selectAll("path")
-        .attr("opacity", 0.5)
+        .attr("opacity", 0.35)
         .attr("stroke", "rgba(255,255,255,0.08)")
         .attr("stroke-width", 0.5);
 
