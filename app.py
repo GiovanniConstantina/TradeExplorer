@@ -11,7 +11,8 @@ Year: 2026
 """
 
 import dash
-from dash import html, dcc, Input, Output, ctx
+import dash
+from dash import html, dcc, Input, Output, State, ctx
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
@@ -230,6 +231,7 @@ choropleth_config = {
 # APP LAYOUT AND DESIGN
 app.layout = html.Div([
     dcc.Store(id='active-viz', data='sankey'),
+    dcc.Store(id='sankey-selected', data=None),
 
     # Header
     html.Div([
@@ -252,7 +254,7 @@ app.layout = html.Div([
     html.Div([
         html.Span('REGION', style={
             'fontFamily': 'monospace', 'fontSize': '14px',
-            'color': text3_color, 'letterSpacing': '0.08em'
+            'color': 'white', 'letterSpacing': '0.08em'
         }),
         dcc.RadioItems(
             id='region-filter',
@@ -285,7 +287,7 @@ app.layout = html.Div([
         html.Div([
             html.Span('YEAR', style={
                 'fontFamily': 'monospace', 'fontSize': '14px',
-                'color': text3_color, 'letterSpacing': '0.08em'
+                'color': 'white', 'letterSpacing': '0.08em'
             }),
             dcc.Dropdown(
                 id='year-dropdown',
@@ -307,7 +309,7 @@ app.layout = html.Div([
         html.Div([
             html.Span('FLOW', style={
                 'fontFamily': 'monospace', 'fontSize': '14px',
-                'color': text3_color, 'letterSpacing': '0.08em'
+                'color': 'white', 'letterSpacing': '0.08em'
             }),
             dcc.Dropdown(
                 id='flow-dropdown',
@@ -328,7 +330,7 @@ app.layout = html.Div([
         html.Div([
             html.Span('TOP-N', style={
                 'fontFamily': 'monospace', 'fontSize': '14px',
-                'color': text3_color, 'letterSpacing': '0.08em', 'marginRight': '5px'
+                'color': 'white', 'letterSpacing': '0.08em', 'marginRight': '5px'
             }),
             html.Div([
                 dcc.Slider(
@@ -359,7 +361,7 @@ app.layout = html.Div([
         html.Div([
             html.Span('SEARCH', style={
                 'fontFamily': 'monospace', 'fontSize': '14px',
-                'color': text3_color, 'letterSpacing': '0.08em', 'marginRight': '5px'
+                'color': 'white', 'letterSpacing': '0.08em', 'marginRight': '5px'
             }),
             dcc.Input(
                 id='search-input',
@@ -503,11 +505,11 @@ app.layout = html.Div([
                 html.Span('Sankey diagram — Trade flow magnitude', style={
                     'fontSize': '13px', 'fontWeight': '600', 'color': text1_color
                 }),
-                html.Span('  (values scaled using √ transform for readability)', style={
+                html.Span('  (values scaled using √ transform · click a ribbon to highlight)', style={
                     'fontSize': '10px', 'color': text3_color, 'marginLeft': '8px'
                 }),
             ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '12px'}),
-            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '700px'})
+            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '700px'}, clickData=None)
         ], style={
             'background': card_color, 'borderRadius': '12px', 'padding': '20px 24px',
             'marginBottom': '16px', 'border': '1px solid rgba(255,255,255,0.03)',
@@ -704,6 +706,35 @@ def find_country(search):
 
 
 # CALLBACKS
+# CALLBACK: Store sankey click — no_update on None prevents reset loop
+@app.callback(
+    Output('sankey-selected', 'data'),
+    Input('sankey-chart', 'clickData'),
+    prevent_initial_call=True
+)
+def store_sankey_click(click_data):
+    if click_data is None:
+        # Figure redraws reset clickData to None — ignore it, keep stored value
+        return dash.no_update
+    pts = click_data.get('points', [])
+    if not pts:
+        return dash.no_update
+    pt = pts[0]
+    # Ribbon click: customdata = [value, exporter_name, importer_name]
+    cd = pt.get('customdata')
+    if cd and len(cd) >= 2:
+        for iso, name in country_names.items():
+            if name == cd[1]:
+                return iso
+    # Node click fallback: label = display name
+    label = pt.get('label')
+    if label:
+        for iso, name in country_names.items():
+            if name == label:
+                return iso
+    return dash.no_update
+
+
 @app.callback(
     [Output('sankey-container', 'style'),
      Output('choro-container', 'style'),
@@ -821,13 +852,15 @@ def update_metrics(region, year, flow):
      Input('year-dropdown', 'value'),
      Input('top-n-slider', 'value'),
      Input('search-input', 'value'),
-     Input('flow-dropdown', 'value')]
+     Input('flow-dropdown', 'value'),
+     Input('sankey-selected', 'data')]
 )
-def update_sankey(region, year, topn, search, flow):
+def update_sankey(region, year, topn, search, flow, selected_iso):
     """Generate Sankey diagram showing trade flows."""
     dff = filter_data(region, year, flow)
     dff = dff.nlargest(topn, 'Trade_Value_USD')
     searched_country = find_country(search)
+    highlight_country = selected_iso or searched_country
 
     if search and search.strip() and searched_country is None:
         fig = go.Figure()
@@ -868,8 +901,7 @@ def update_sankey(region, year, topn, search, flow):
     exp_idx = {e: i for i, e in enumerate(exporters)}
     imp_idx = {i: len(exporters) + j for j, i in enumerate(importers)}
 
-    # Highlight flows for searched country, dim everything else
-    has_selection = searched_country is not None
+    has_hl = highlight_country is not None
 
     sources, targets, values, colors, customdata = [], [], [], [], []
     for _, row in dff.iterrows():
@@ -879,9 +911,9 @@ def update_sankey(region, year, topn, search, flow):
             sources.append(src)
             targets.append(tgt)
             values.append(np.sqrt(row['Trade_Value_USD']))
-            if has_selection:
-                involves = (row['Exporter'] == searched_country or row['Importer'] == searched_country)
-                alpha = 0.90 if involves else 0.08
+            if has_hl:
+                involved = (row['Exporter'] == highlight_country or row['Importer'] == highlight_country)
+                alpha = 0.90 if involved else 0.08
             else:
                 alpha = 0.50
             colors.append(hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), alpha))
@@ -897,14 +929,14 @@ def update_sankey(region, year, topn, search, flow):
     for e in exporters:
         reg = dff[dff['Exporter'] == e]['Exporter_Region'].iloc[0] if e in dff['Exporter'].values else 'Africa'
         node_colors.append(regions_colors.get(reg, '#666'))
-        is_sel = has_selection and e == searched_country
+        is_sel = has_hl and e == highlight_country
         node_line_colors.append('white' if is_sel else 'rgba(0,0,0,0)')
         node_line_widths.append(2.5 if is_sel else 0)
 
     for i in importers:
         reg = dff[dff['Importer'] == i]['Importer_Region'].iloc[0] if i in dff['Importer'].values else 'Africa'
         node_colors.append(regions_colors.get(reg, '#666'))
-        is_sel = has_selection and i == searched_country
+        is_sel = has_hl and i == highlight_country
         node_line_colors.append('white' if is_sel else 'rgba(0,0,0,0)')
         node_line_widths.append(2.5 if is_sel else 0)
 
