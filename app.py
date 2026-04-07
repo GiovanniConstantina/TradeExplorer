@@ -363,6 +363,7 @@ app.layout = html.Div([
                 'fontFamily': 'monospace', 'fontSize': '14px',
                 'color': 'white', 'letterSpacing': '0.08em', 'marginRight': '5px'
             }),
+
             dcc.Input(
                 id='search-input',
                 type='text',
@@ -374,12 +375,31 @@ app.layout = html.Div([
                     'background': input_color, 'color': text1_color, 'outline': 'none'
                 }
             ),
+
+            html.Button(
+                "Reset",
+                id="reset-btn",
+                n_clicks=0,
+                style={
+                    'marginLeft': '20px',
+                    'padding': '6px 12px',
+                    'fontSize': '12px',
+                    'borderRadius': '6px',
+                    'border': '1px solid rgba(255,255,255,0.08)',
+                    'background': '#1e2330',
+                    'color': 'white',
+                    'cursor': 'pointer'
+                }
+            ),
+
         ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
     ], style={
         'background': card_color, 'padding': '10px 40px',
         'display': 'flex', 'alignItems': 'center', 'gap': '32px',
         'flexWrap': 'wrap', 'borderBottom': '1px solid rgba(255,255,255,0.04)'
     }),
+
+
 
     # Metric Row
     html.Div([
@@ -710,30 +730,53 @@ def find_country(search):
 @app.callback(
     Output('sankey-selected', 'data'),
     Input('sankey-chart', 'clickData'),
+    Input('search-input', 'value'),
+    Input('reset-btn', 'n_clicks'),
+    State('region-filter', 'value'),
+    State('year-dropdown', 'value'),
+    State('top-n-slider', 'value'),
+    State('flow-dropdown', 'value'),
     prevent_initial_call=True
 )
-def store_sankey_click(click_data):
-    if click_data is None:
-        # Figure redraws reset clickData to None — ignore it, keep stored value
+def store_sankey_click(click_data, search, reset_clicks, region, year, topn, flow):
+
+    trigger = ctx.triggered_id
+
+    if trigger == 'reset-btn':
+        return None
+
+    if trigger == 'search-input':
+        return None
+
+    if not click_data:
         return dash.no_update
-    pts = click_data.get('points', [])
-    if not pts:
-        return dash.no_update
-    pt = pts[0]
-    # Ribbon click: customdata = [value, exporter_name, importer_name]
-    cd = pt.get('customdata')
-    if cd and len(cd) >= 2:
-        for iso, name in country_names.items():
-            if name == cd[1]:
-                return iso
-    # Node click fallback: label = display name
+
+    pt = click_data['points'][0]
+
+    dff = filter_data(region, year, flow)
+    dff = dff.nlargest(topn, 'Trade_Value_USD').reset_index(drop=True)
+
+    if 'pointNumber' in pt:
+        idx = pt['pointNumber']
+        if idx < len(dff):
+            row = dff.iloc[idx]
+            return row['Exporter']
+
     label = pt.get('label')
     if label:
         for iso, name in country_names.items():
             if name == label:
                 return iso
+
     return dash.no_update
 
+@app.callback(
+    Output('search-input', 'value'),
+    Input('reset-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def clear_search(n):
+    return ''
 
 @app.callback(
     [Output('sankey-container', 'style'),
@@ -860,7 +903,14 @@ def update_sankey(region, year, topn, search, flow, selected_iso):
     dff = filter_data(region, year, flow)
     dff = dff.nlargest(topn, 'Trade_Value_USD')
     searched_country = find_country(search)
-    highlight_country = selected_iso or searched_country
+    highlight_country = trigger = ctx.triggered_id
+
+    if trigger == 'search-input':
+        highlight_country = searched_country
+    elif trigger == 'sankey-selected':
+        highlight_country = selected_iso
+    else:
+        highlight_country = searched_country or selected_iso if searched_country else selected_iso
 
     if search and search.strip() and searched_country is None:
         fig = go.Figure()
