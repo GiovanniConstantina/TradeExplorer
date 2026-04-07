@@ -119,9 +119,9 @@ df = pd.read_csv('data/trade_data_cleaned.csv')
 background_color = '#08090c'
 card_color = '#0d0f14'
 input_color = '#12151c'
-text1_color = '#e8eaf0'
-text2_color = '#9499a8'
-text3_color = '#4a4f5e'
+text1_color = '#eceef4'
+text2_color = '#b8bcc8'   # was #9499a8 — improved contrast
+text3_color = '#6b7280'   # was #4a4f5e — improved contrast
 accent_color = '#3b82f6'
 success_color = '#10b981'
 warning_color = '#f59e0b'
@@ -230,6 +230,8 @@ choropleth_config = {
 # APP LAYOUT AND DESIGN
 app.layout = html.Div([
     dcc.Store(id='active-viz', data='sankey'),
+    dcc.Store(id='sankey-selected', data=None),   # tracks clicked node label
+    dcc.Store(id='choro-selected', data=None),    # tracks clicked country ISO
 
     # Header
     html.Div([
@@ -348,7 +350,7 @@ app.layout = html.Div([
                     className='topn-slider'
                 ),
             ], className='topn-wrap'),
-            html.Span('Sankey + Chord', style={
+            html.Span(id='topn-note', style={
                 'fontFamily': 'monospace', 'fontSize': '10px',
                 'color': text3_color, 'letterSpacing': '0.06em',
                 'marginLeft': '6px', 'whiteSpace': 'nowrap'
@@ -507,7 +509,8 @@ app.layout = html.Div([
                     'fontSize': '10px', 'color': text3_color, 'marginLeft': '8px'
                 }),
             ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '12px'}),
-            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '700px'})
+            dcc.Graph(id='sankey-chart', config=sankey_config, style={'height': '700px'},
+                      clickData=None)
         ], style={
             'background': card_color, 'borderRadius': '12px', 'padding': '20px 24px',
             'marginBottom': '16px', 'border': '1px solid rgba(255,255,255,0.03)',
@@ -529,7 +532,8 @@ app.layout = html.Div([
                     'fontSize': '10px', 'color': text3_color, 'marginLeft': '8px'
                 }),
             ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginBottom': '12px'}),
-            dcc.Graph(id='choro-chart', config=choropleth_config, style={'height': '500px'}),
+            dcc.Graph(id='choro-chart', config=choropleth_config, style={'height': '500px'},
+                      clickData=None),
         ], style={
             'background': card_color, 'borderRadius': '12px', 'padding': '20px 24px',
             'marginBottom': '16px', 'border': '1px solid rgba(255,255,255,0.03)',
@@ -703,7 +707,55 @@ def find_country(search):
     return None
 
 
-# CALLBACKS
+@app.callback(
+    [Output('top-n-slider', 'disabled'),
+     Output('topn-note', 'children'),
+     Output('topn-note', 'style')],
+    Input('active-viz', 'data')
+)
+def update_topn_state(active_viz):
+    """Disable Top-N slider for choropleth (not applicable) and show status note."""
+    base_style = {
+        'fontFamily': 'monospace', 'fontSize': '10px',
+        'letterSpacing': '0.06em', 'marginLeft': '6px', 'whiteSpace': 'nowrap'
+    }
+    if active_viz == 'choropleth':
+        return True, 'N/A — choropleth uses colour intensity, not top-N', {
+            **base_style, 'color': warning_color, 'fontStyle': 'italic'
+        }
+    elif active_viz == 'chord':
+        return False, 'Sankey + Chord (chord capped at 20 for readability)', {
+            **base_style, 'color': text3_color
+        }
+    return False, 'Sankey + Chord', {**base_style, 'color': text3_color}
+
+
+@app.callback(
+    Output('sankey-selected', 'data'),
+    Input('sankey-chart', 'clickData'),
+    prevent_initial_call=True
+)
+def store_sankey_click(clickData):
+    """Store the label of the clicked Sankey node."""
+    if clickData and 'points' in clickData:
+        pt = clickData['points'][0]
+        return pt.get('label') or pt.get('source', {}).get('label')
+    return None
+
+
+@app.callback(
+    Output('choro-selected', 'data'),
+    Input('choro-chart', 'clickData'),
+    prevent_initial_call=True
+)
+def store_choro_click(clickData):
+    """Store ISO code of clicked choropleth country."""
+    if clickData and 'points' in clickData:
+        return clickData['points'][0].get('location')
+    return None
+
+
+
 @app.callback(
     [Output('sankey-container', 'style'),
      Output('choro-container', 'style'),
@@ -821,9 +873,10 @@ def update_metrics(region, year, flow):
      Input('year-dropdown', 'value'),
      Input('top-n-slider', 'value'),
      Input('search-input', 'value'),
-     Input('flow-dropdown', 'value')]
+     Input('flow-dropdown', 'value'),
+     Input('sankey-selected', 'data')]
 )
-def update_sankey(region, year, topn, search, flow):
+def update_sankey(region, year, topn, search, flow, selected_node):
     """Generate Sankey diagram showing trade flows."""
     dff = filter_data(region, year, flow)
     dff = dff.nlargest(topn, 'Trade_Value_USD')
@@ -869,14 +922,33 @@ def update_sankey(region, year, topn, search, flow):
     imp_idx = {i: len(exporters) + j for j, i in enumerate(importers)}
 
     sources, targets, values, colors, customdata = [], [], [], [], []
-    for _, row in dff.iterrows():
+    # Determine which row indices involve the selected node
+    selected_rows = set()
+    if selected_node:
+        for idx, row in enumerate(dff.itertuples()):
+            if get_name(row.Exporter) == selected_node or get_name(row.Importer) == selected_node:
+                selected_rows.add(idx)
+    has_selection = bool(selected_rows)
+
+    for idx, row in enumerate(dff.iterrows()):
+        _, row = row
         src = exp_idx.get(row['Exporter'])
         tgt = imp_idx.get(row['Importer'])
         if src is not None and tgt is not None:
             sources.append(src)
             targets.append(tgt)
             values.append(np.sqrt(row['Trade_Value_USD']))
-            colors.append(hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), 0.50))
+            base_rgba = hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), 0.50)
+            if has_selection:
+                if idx in selected_rows:
+                    # Brighten selected links
+                    link_color = hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), 0.85)
+                else:
+                    # Dim unrelated links
+                    link_color = hex_to_rgba(regions_colors.get(row['Exporter_Region'], '#666'), 0.12)
+            else:
+                link_color = base_rgba
+            colors.append(link_color)
             customdata.append([
                 row['Trade_Value_USD'],
                 get_name(row['Exporter']),
@@ -884,20 +956,30 @@ def update_sankey(region, year, topn, search, flow):
             ])
 
     node_colors = []
+    node_borders = []
+    node_border_widths = []
     for e in exporters:
         reg = dff[dff['Exporter'] == e]['Exporter_Region'].iloc[0] if e in dff['Exporter'].values else 'Africa'
-        node_colors.append(regions_colors.get(reg, '#666'))
+        base_col = regions_colors.get(reg, '#666')
+        node_colors.append(base_col)
+        is_selected = selected_node and get_name(e) == selected_node
+        node_borders.append('white' if is_selected else 'rgba(0,0,0,0)')
+        node_border_widths.append(2.5 if is_selected else 0)
 
     for i in importers:
         reg = dff[dff['Importer'] == i]['Importer_Region'].iloc[0] if i in dff['Importer'].values else 'Africa'
-        node_colors.append(regions_colors.get(reg, '#666'))
+        base_col = regions_colors.get(reg, '#666')
+        node_colors.append(base_col)
+        is_selected = selected_node and get_name(i) == selected_node
+        node_borders.append('white' if is_selected else 'rgba(0,0,0,0)')
+        node_border_widths.append(2.5 if is_selected else 0)
 
     fig = go.Figure(go.Sankey(
         arrangement='snap',
         node=dict(
             pad=8,
             thickness=10,
-            line=dict(width=0),
+            line=dict(width=node_border_widths, color=node_borders),
             label=labels,
             color=node_colors,
             hovertemplate='Country: %{label}<extra></extra>'
@@ -961,9 +1043,10 @@ def update_sankey(region, year, topn, search, flow):
     [Input('region-filter', 'value'),
      Input('year-dropdown', 'value'),
      Input('search-input', 'value'),
-     Input('flow-dropdown', 'value')]
+     Input('flow-dropdown', 'value'),
+     Input('choro-selected', 'data')]
 )
-def update_choropleth(region, year, search, flow):
+def update_choropleth(region, year, search, flow, selected_country):
     """Generate choropleth map showing geographic distribution."""
     dff = filter_data(region, year, flow)
     searched_country = find_country(search)
@@ -996,6 +1079,21 @@ def update_choropleth(region, year, search, flow):
         marker_line_color='#181c26'
     ))
 
+    # Highlight click-selected country with bold border ring
+    if selected_country and selected_country in totals['ISO'].values:
+        country_val = totals.loc[totals['ISO'] == selected_country, 'Value'].values
+        label = f"{get_name(selected_country)}<br>{value_label}: ${country_val[0]/1e9:.1f}B" if len(country_val) else get_name(selected_country)
+        fig.add_trace(go.Choropleth(
+            locations=[selected_country],
+            z=[0],
+            showscale=False,
+            colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
+            marker_line_width=3.5,
+            marker_line_color='white',
+            hoverinfo='skip',
+        ))
+
+    # Highlight searched country with accent marker
     if searched_country and searched_country in totals['ISO'].values:
         fig.add_trace(go.Scattergeo(
             locations=[searched_country],
@@ -1028,7 +1126,7 @@ def update_choropleth(region, year, search, flow):
         uirevision='choro-zoom',
         annotations=[
             dict(
-                text=f'Colour intensity = higher {value_label.lower()}',
+                text=f'Colour intensity = higher {value_label.lower()} · Click a country to highlight',
                 x=0.02, y=1.06, xref='paper', yref='paper',
                 showarrow=False, font=dict(color=text2_color, size=11),
                 align='left'
