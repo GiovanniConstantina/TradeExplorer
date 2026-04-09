@@ -792,7 +792,7 @@ def update_topn_state(active_viz):
         return True, 'Not used — choropleth uses colour intensity', {**base, 'color': '#f59e0b', 'fontStyle': 'italic'}, hidden
     elif active_viz == 'chord':
         return False, 'Chord capped at 20 for readability', {**base, 'color': text3_color}, visible
-    return False, 'Applies to Sankey + Chord', {**base, 'color': text3_color}, visible
+    return False, 'Applies to Sankey only', {**base, 'color': text3_color}, visible
 
 
 @app.callback(
