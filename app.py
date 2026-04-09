@@ -6,11 +6,10 @@ Study Design: Users complete Google Form tasks while freely exploring this dashb
 
 Author: Constantina Giovanni
 Institution: Newcastle University
-Module: CSC3094 - Computing Project
+Module: CSC3094 - Dissertation
 Year: 2026
 """
 
-import dash
 import dash
 from dash import html, dcc, Input, Output, State, ctx
 import plotly.graph_objects as go
@@ -121,8 +120,8 @@ background_color = '#08090c'
 card_color = '#0d0f14'
 input_color = '#12151c'
 text1_color = '#e8eaf0'
-text2_color = '#9499a8'
-text3_color = '#4a4f5e'
+text2_color = '#b8bcc8'
+text3_color = '#6b7280'
 accent_color = '#3b82f6'
 success_color = '#10b981'
 warning_color = '#f59e0b'
@@ -346,11 +345,11 @@ app.layout = html.Div([
                         40: {'label': '40', 'style': {'color': '#8b90a0'}},
                         50: {'label': '50', 'style': {'color': '#8b90a0'}},
                     },
-                    tooltip={"placement": "bottom", "always_visible": True},
+                    tooltip={"placement": "bottom", "always_visible": False},
                     className='topn-slider'
                 ),
-            ], className='topn-wrap'),
-            html.Span('Sankey + Chord', style={
+            ], className='topn-wrap', id='topn-wrap'),
+            html.Span(id='topn-note', style={
                 'fontFamily': 'monospace', 'fontSize': '10px',
                 'color': text3_color, 'letterSpacing': '0.06em',
                 'marginLeft': '6px', 'whiteSpace': 'nowrap'
@@ -777,6 +776,24 @@ def store_sankey_click(click_data, search, reset_clicks, region, year, topn, flo
 )
 def clear_search(n):
     return ''
+@app.callback(
+    [Output('top-n-slider', 'disabled'),
+     Output('topn-note', 'children'),
+     Output('topn-note', 'style'),
+     Output('topn-wrap', 'style')],
+    Input('active-viz', 'data')
+)
+def update_topn_state(active_viz):
+    base = {'fontFamily': 'monospace', 'fontSize': '10px',
+            'letterSpacing': '0.06em', 'marginLeft': '6px', 'whiteSpace': 'nowrap'}
+    visible = {'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'width': '360px'}
+    hidden  = {'display': 'none'}
+    if active_viz == 'choropleth':
+        return True, 'Not used — choropleth uses colour intensity', {**base, 'color': '#f59e0b', 'fontStyle': 'italic'}, hidden
+    elif active_viz == 'chord':
+        return False, 'Chord capped at 20 for readability', {**base, 'color': text3_color}, visible
+    return False, 'Applies to Sankey + Chord', {**base, 'color': text3_color}, visible
+
 
 @app.callback(
     [Output('sankey-container', 'style'),
