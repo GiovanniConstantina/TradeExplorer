@@ -4,7 +4,6 @@ Dashboard for comparative evaluation of data visualization techniques
 
 Study Design: Users complete Google Form tasks while freely exploring this dashboard.
 
-Author: Constantina Giovanni
 Institution: Newcastle University
 Module: CSC3094 - Dissertation
 Year: 2026
