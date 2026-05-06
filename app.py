@@ -122,7 +122,7 @@ text1_color = '#e8eaf0'
 text2_color = '#b8bcc8'
 text3_color = '#6b7280'
 accent_color = '#3b82f6'
-yellow_color = '#10b981'
+green_color = '#10b981'
 yellow_color = '#f59e0b'
 red_color = '#ef4444'
 
@@ -643,33 +643,33 @@ app.layout = html.Div([
                 html.Tbody([
                     html.Tr([
                         html.Td('Volume encoding', style={'color': text2_color, 'padding': '10px 12px'}),
-                        html.Td('High', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                         html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                         html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Directional clarity', style={'color': text2_color, 'padding': '10px 12px'}),
-                        html.Td('High', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                         html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
                         html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Geographic grounding', style={'color': text2_color, 'padding': '10px 12px'}),
                         html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
-                        html.Td('High', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                         html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Structural clustering', style={'color': text2_color, 'padding': '10px 12px'}),
                         html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
                         html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
-                        html.Td('High', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Cognitive load', style={'color': text2_color, 'padding': '10px 12px'}),
                         html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                         html.Td('Low', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
-                        html.Td('High', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                     ]),
                 ]),
             ], style={'width': '100%', 'borderCollapse': 'collapse', 'fontSize': '12px'}),
