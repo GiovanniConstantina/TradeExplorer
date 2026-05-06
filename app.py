@@ -644,31 +644,31 @@ app.layout = html.Div([
                     html.Tr([
                         html.Td('Volume encoding', style={'color': text2_color, 'padding': '10px 12px'}),
                         html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
-                        html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
-                        html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
+                        html.Td('Med', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('Med', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Directional clarity', style={'color': text2_color, 'padding': '10px 12px'}),
                         html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
-                        html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
-                        html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
+                        html.Td('Low', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
+                        html.Td('Med', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Geographic grounding', style={'color': text2_color, 'padding': '10px 12px'}),
-                        html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
+                        html.Td('Low', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                         html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
-                        html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
+                        html.Td('Low', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Structural clustering', style={'color': text2_color, 'padding': '10px 12px'}),
-                        html.Td('Low', style={'textAlign': 'center', 'color': danger_color, 'padding': '10px'}),
-                        html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
+                        html.Td('Low', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
+                        html.Td('Med', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
                         html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                     ]),
                     html.Tr([
                         html.Td('Cognitive load', style={'color': text2_color, 'padding': '10px 12px'}),
-                        html.Td('Med', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
-                        html.Td('Low', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('Med', style={'textAlign': 'center', 'color': yellow_color, 'padding': '10px'}),
+                        html.Td('Low', style={'textAlign': 'center', 'color': red_color, 'padding': '10px'}),
                         html.Td('High', style={'textAlign': 'center', 'color': green_color, 'padding': '10px'}),
                     ]),
                 ]),
@@ -936,7 +936,7 @@ def update_sankey(region, year, topn, search, flow, selected_iso):
             annotations=[dict(
                 text=f'No country found for "{search}".<br>Try "Russia" or "RUS".',
                 x=0.5, y=0.5, xref='paper', yref='paper', showarrow=False,
-                font=dict(color=danger_color, size=14)
+                font=dict(color=red_color, size=14)
             )]
         )
         return fig
